@@ -31,6 +31,7 @@ function SearchStatus() {
   const [results, setResults] = useState<CallResult[]>([])
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
   const cancelledRef = useRef(false)
 
   useEffect(() => {
@@ -70,6 +71,7 @@ function SearchStatus() {
         if (!response.ok) throw new Error("Failed to start calls")
         const data: { jobId: string } = await response.json()
         if (cancelledRef.current) return
+        setJobId(data.jobId)
         poll(data.jobId)
       } catch {
         if (!cancelledRef.current) {
@@ -142,11 +144,11 @@ function SearchStatus() {
           </ul>
         )}
 
-        {done && (
+        {done && jobId && (
           <Button
             className="w-full"
             nativeButton={false}
-            render={<Link href="/results" />}
+            render={<Link href={`/results?jobId=${jobId}`} />}
           >
             View Results
           </Button>
