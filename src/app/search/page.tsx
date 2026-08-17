@@ -2,28 +2,14 @@
 
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { CheckCircle2Icon, XCircleIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import type { CallResult } from "@/lib/call-jobs"
 
-type CallStatus = "Calling" | "Complete" | "No answer"
-
-interface TradespersonCall {
-  name: string
-  finalStatus: "Complete" | "No answer"
-}
-
-const TRADESPEOPLE: TradespersonCall[] = [
-  { name: "Sarah Ahmed", finalStatus: "Complete" },
-  { name: "John Smith", finalStatus: "Complete" },
-  { name: "Mike O'Brien", finalStatus: "Complete" },
-  { name: "Dave Wilson", finalStatus: "No answer" },
-  { name: "Priya Patel", finalStatus: "No answer" },
-]
-
-const STEP_DELAY_MS = 2000
+const POLL_INTERVAL_MS = 1500
 
 export default function SearchPage() {
   return (
@@ -35,33 +21,68 @@ export default function SearchPage() {
 
 function SearchStatus() {
   const searchParams = useSearchParams()
-  const tradeType = searchParams.get("tradeType")
-  const postcode = searchParams.get("postcode")
+  const tradeType = searchParams.get("tradeType") ?? ""
+  const postcode = searchParams.get("postcode") ?? ""
+  const urgency = searchParams.get("urgency") ?? ""
+  const description = searchParams.get("description") ?? ""
 
-  const [statuses, setStatuses] = useState<CallStatus[]>(() =>
-    TRADESPEOPLE.map(() => "Calling")
-  )
+  const [results, setResults] = useState<CallResult[]>([])
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const cancelledRef = useRef(false)
 
-  // TODO: replace with real CALL-E calls — this simulates status updates
-  // that will eventually come from the CALL-E API as calls complete.
   useEffect(() => {
-    const timeouts = TRADESPEOPLE.map((tradesperson, index) =>
-      setTimeout(
-        () => {
-          setStatuses((prev) => {
-            const next = [...prev]
-            next[index] = tradesperson.finalStatus
-            return next
-          })
-        },
-        (index + 1) * STEP_DELAY_MS
-      )
-    )
+    cancelledRef.current = false
+    let pollTimeout: ReturnType<typeof setTimeout> | undefined
 
-    return () => timeouts.forEach(clearTimeout)
-  }, [])
+    async function poll(jobId: string) {
+      try {
+        const response = await fetch(
+          `/api/search?jobId=${encodeURIComponent(jobId)}`
+        )
+        if (!response.ok) throw new Error("Failed to fetch call status")
+        const data: { results: CallResult[]; done: boolean } =
+          await response.json()
+        if (cancelledRef.current) return
 
-  const allDone = statuses.every((status) => status !== "Calling")
+        setResults(data.results)
+        if (data.done) {
+          setDone(true)
+        } else {
+          pollTimeout = setTimeout(() => poll(jobId), POLL_INTERVAL_MS)
+        }
+      } catch {
+        if (!cancelledRef.current) {
+          setError("Something went wrong while checking call status.")
+        }
+      }
+    }
+
+    async function start() {
+      try {
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tradeType, postcode, urgency, description }),
+        })
+        if (!response.ok) throw new Error("Failed to start calls")
+        const data: { jobId: string } = await response.json()
+        if (cancelledRef.current) return
+        poll(data.jobId)
+      } catch {
+        if (!cancelledRef.current) {
+          setError("Something went wrong while starting calls.")
+        }
+      }
+    }
+
+    start()
+
+    return () => {
+      cancelledRef.current = true
+      if (pollTimeout) clearTimeout(pollTimeout)
+    }
+  }, [tradeType, postcode, urgency, description])
 
   return (
     <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16 dark:bg-black">
@@ -75,19 +96,23 @@ function SearchStatus() {
           )}
         </div>
 
-        <ul className="flex flex-col gap-3">
-          {TRADESPEOPLE.map((tradesperson, index) => (
-            <li
-              key={tradesperson.name}
-              className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 dark:bg-black"
-            >
-              <span className="text-sm font-medium">{tradesperson.name}</span>
-              <StatusIndicator status={statuses[index]} />
-            </li>
-          ))}
-        </ul>
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-        {allDone && (
+        {results.length > 0 && (
+          <ul className="flex flex-col gap-3">
+            {results.map((result) => (
+              <li
+                key={result.id}
+                className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 dark:bg-black"
+              >
+                <span className="text-sm font-medium">{result.name}</span>
+                <StatusIndicator status={result.status} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {done && (
           <Button
             className="w-full"
             nativeButton={false}
@@ -101,8 +126,8 @@ function SearchStatus() {
   )
 }
 
-function StatusIndicator({ status }: { status: CallStatus }) {
-  if (status === "Calling") {
+function StatusIndicator({ status }: { status: CallResult["status"] }) {
+  if (status === "calling") {
     return (
       <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Spinner />
@@ -111,7 +136,7 @@ function StatusIndicator({ status }: { status: CallStatus }) {
     )
   }
 
-  if (status === "Complete") {
+  if (status === "complete") {
     return (
       <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-500">
         <CheckCircle2Icon className="size-4" />
