@@ -22,7 +22,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "tradefinder",
-  description: "Find a tradesperson — we call around for you.",
+  description: "Find a tradesperson, we call around for you.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

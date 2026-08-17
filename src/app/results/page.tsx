@@ -24,6 +24,14 @@ function isSameDay(availability: string | null) {
   return !!availability && availability.toLowerCase().startsWith("today")
 }
 
+function parseEtaMinutes(eta: string | null): number | null {
+  if (!eta) return null
+  const match = eta.match(/(\d+(?:\.\d+)?)\s*(hour|hr|min)/i)
+  if (!match) return null
+  const value = parseFloat(match[1])
+  return match[2].toLowerCase().startsWith("h") ? value * 60 : value
+}
+
 export default function ResultsPage() {
   return (
     <Suspense fallback={null}>
@@ -37,6 +45,7 @@ function ResultsContent() {
   const jobId = searchParams.get("jobId")
 
   const [results, setResults] = useState<CallResult[] | null>(null)
+  const [urgency, setUrgency] = useState<string>("")
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cancelledRef = useRef(false)
@@ -53,11 +62,12 @@ function ResultsContent() {
           `/api/search?jobId=${encodeURIComponent(jobId!)}`
         )
         if (!response.ok) throw new Error("Failed to fetch results")
-        const data: { results: CallResult[]; done: boolean } =
+        const data: { results: CallResult[]; done: boolean; urgency: string } =
           await response.json()
         if (cancelledRef.current) return
 
         setResults(data.results)
+        setUrgency(data.urgency)
         setDone(data.done)
         if (!data.done) {
           pollTimeout = setTimeout(poll, POLL_INTERVAL_MS)
@@ -137,24 +147,53 @@ function ResultsContent() {
 
   const available = results.filter((r) => r.status === "complete")
   const handlingAvailable = available.filter((r) => r.handlesJob === true)
-  const handlingWithFee = handlingAvailable.filter(
-    (r) => r.calloutFee !== null
-  )
-  const sameDayWithFee = handlingWithFee.filter((r) => isSameDay(r.availability))
-  const recommendationPool =
-    sameDayWithFee.length > 0
-      ? sameDayWithFee
-      : handlingWithFee.length > 0
-        ? handlingWithFee
-        : handlingAvailable
-  const recommended =
-    recommendationPool.length > 0
-      ? recommendationPool.reduce((cheapest, r) =>
-          (r.calloutFee ?? Infinity) < (cheapest.calloutFee ?? Infinity)
-            ? r
-            : cheapest
+
+  // Urgency drives what "best" means: an emergency job cares about who can
+  // get there soonest, not who's cheapest. Anything less urgent falls back
+  // to lowest call-out fee.
+  let recommended: CallResult | null = null
+  let recommendationReason: "fastest" | "cheapest" | null = null
+
+  if (handlingAvailable.length > 0) {
+    if (urgency === "Today") {
+      const sameDayHandling = handlingAvailable.filter((r) =>
+        isSameDay(r.availability)
+      )
+      const pool = sameDayHandling.length > 0 ? sameDayHandling : handlingAvailable
+      const withEta = pool
+        .map((r) => ({ result: r, minutes: parseEtaMinutes(r.eta) }))
+        .filter(
+          (entry): entry is { result: CallResult; minutes: number } =>
+            entry.minutes !== null
         )
-      : null
+
+      if (withEta.length > 0) {
+        recommended = withEta.reduce((fastest, entry) =>
+          entry.minutes < fastest.minutes ? entry : fastest
+        ).result
+        recommendationReason = "fastest"
+      } else {
+        const withFee = pool.filter((r) => r.calloutFee !== null)
+        recommended =
+          withFee.length > 0
+            ? withFee.reduce((cheapest, r) =>
+                r.calloutFee! < cheapest.calloutFee! ? r : cheapest
+              )
+            : pool[0]
+        recommendationReason = "cheapest"
+      }
+    } else {
+      const withFee = handlingAvailable.filter((r) => r.calloutFee !== null)
+      const pool = withFee.length > 0 ? withFee : handlingAvailable
+      recommended = pool.reduce((cheapest, r) =>
+        (r.calloutFee ?? Infinity) < (cheapest.calloutFee ?? Infinity)
+          ? r
+          : cheapest
+      )
+      recommendationReason = "cheapest"
+    }
+  }
+
   const recommendedIsSameDay = recommended
     ? isSameDay(recommended.availability)
     : false
@@ -198,10 +237,20 @@ function ResultsContent() {
               {recommended.name}
             </span>{" "}
             is recommended
-            {recommended.calloutFee !== null && (
-              <> — lowest call-out fee (£{recommended.calloutFee})</>
+            {recommendationReason === "fastest" && recommended.eta && (
+              <>
+                , fastest arrival ({recommended.eta}) for a same-day
+                emergency
+              </>
             )}
-            {recommendedIsSameDay ? " with same-day availability" : ""}.
+            {recommendationReason === "cheapest" &&
+              recommended.calloutFee !== null && (
+                <> for the lowest call-out fee (£{recommended.calloutFee})</>
+              )}
+            {recommendationReason === "cheapest" && recommendedIsSameDay
+              ? " with same-day availability"
+              : ""}
+            .
           </p>
         </Ticket>
       ) : (
@@ -245,13 +294,13 @@ function ResultsContent() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{tradesperson.availability ?? "—"}</TableCell>
+                  <TableCell>{tradesperson.availability ?? "-"}</TableCell>
                   <TableCell>
                     {tradesperson.calloutFee !== null
                       ? `£${tradesperson.calloutFee}`
-                      : "—"}
+                      : "-"}
                   </TableCell>
-                  <TableCell>{tradesperson.eta ?? "—"}</TableCell>
+                  <TableCell>{tradesperson.eta ?? "-"}</TableCell>
                   <TableCell>
                     {tradesperson.handlesJob === true ? (
                       <CheckIcon className="size-4 text-success" />

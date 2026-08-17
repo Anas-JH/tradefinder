@@ -101,7 +101,12 @@ export async function GET(request: NextRequest) {
   }
 
   const done = job.results.every((result) => result.status !== "calling")
-  return NextResponse.json({ jobId: job.id, results: job.results, done })
+  return NextResponse.json({
+    jobId: job.id,
+    urgency: job.urgency,
+    results: job.results,
+    done,
+  })
 }
 
 function runDryRun(job: CallJob) {
@@ -163,7 +168,7 @@ function runRealCalls(job: CallJob) {
   })
 
   // Fire one createAndWait per recipient, in parallel, so each result lands
-  // in the job store — and gets picked up by polling — as soon as that
+  // in the job store (and gets picked up by polling) as soon as that
   // individual call finishes, instead of waiting for the whole batch.
   job.results.forEach((result) => {
     callOne(client, job, result).catch((error) => {
