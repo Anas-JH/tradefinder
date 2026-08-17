@@ -136,20 +136,32 @@ function ResultsContent() {
   }
 
   const available = results.filter((r) => r.status === "complete")
-  const withFee = available.filter((r) => r.calloutFee !== null)
-  const sameDayWithFee = withFee.filter((r) => isSameDay(r.availability))
-  const recommendationPool = sameDayWithFee.length > 0 ? sameDayWithFee : withFee
+  const handlingAvailable = available.filter((r) => r.handlesJob === true)
+  const handlingWithFee = handlingAvailable.filter(
+    (r) => r.calloutFee !== null
+  )
+  const sameDayWithFee = handlingWithFee.filter((r) => isSameDay(r.availability))
+  const recommendationPool =
+    sameDayWithFee.length > 0
+      ? sameDayWithFee
+      : handlingWithFee.length > 0
+        ? handlingWithFee
+        : handlingAvailable
   const recommended =
     recommendationPool.length > 0
       ? recommendationPool.reduce((cheapest, r) =>
-          r.calloutFee! < cheapest.calloutFee! ? r : cheapest
+          (r.calloutFee ?? Infinity) < (cheapest.calloutFee ?? Infinity)
+            ? r
+            : cheapest
         )
       : null
   const recommendedIsSameDay = recommended
     ? isSameDay(recommended.availability)
     : false
 
-  const fees = withFee.map((r) => r.calloutFee!)
+  const fees = available
+    .map((r) => r.calloutFee)
+    .filter((fee): fee is number => fee !== null)
   const minFee = fees.length > 0 ? Math.min(...fees) : null
   const maxFee = fees.length > 0 ? Math.max(...fees) : null
 
@@ -179,16 +191,25 @@ function ResultsContent() {
         )}
       </div>
 
-      {recommended && (
+      {recommended ? (
         <Ticket label="Recommendation" number={ticketRef}>
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">
               {recommended.name}
             </span>{" "}
-            is recommended — lowest call-out fee (£{recommended.calloutFee})
+            is recommended
+            {recommended.calloutFee !== null && (
+              <> — lowest call-out fee (£{recommended.calloutFee})</>
+            )}
             {recommendedIsSameDay ? " with same-day availability" : ""}.
           </p>
         </Ticket>
+      ) : (
+        available.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            None of the contacted tradespeople handle this type of work.
+          </p>
+        )
       )}
 
       {available.length === 0 ? (

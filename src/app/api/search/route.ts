@@ -19,11 +19,31 @@ const DRY_RUN_STEP_MS = 2000
 
 const DRY_RUN_OUTCOMES: Record<
   string,
-  { calloutFee: number; eta: string; availability: string } | null
+  {
+    calloutFee: number
+    eta: string
+    availability: string
+    handlesJob: boolean
+  } | null
 > = {
-  "tp-1": { calloutFee: 75, eta: "45 min", availability: "Today, 4–6pm" },
-  "tp-2": { calloutFee: 95, eta: "30 min", availability: "Today, 2–3pm" },
-  "tp-3": { calloutFee: 120, eta: "2 hrs", availability: "Tomorrow, 9–11am" },
+  "tp-1": {
+    calloutFee: 75,
+    eta: "45 min",
+    availability: "Today, 4–6pm",
+    handlesJob: true,
+  },
+  "tp-2": {
+    calloutFee: 95,
+    eta: "30 min",
+    availability: "Today, 2–3pm",
+    handlesJob: false,
+  },
+  "tp-3": {
+    calloutFee: 120,
+    eta: "2 hrs",
+    availability: "Tomorrow, 9–11am",
+    handlesJob: true,
+  },
   "tp-4": null,
   "tp-5": null,
 }
@@ -90,11 +110,9 @@ function runDryRun(job: CallJob) {
       () => {
         const outcome = DRY_RUN_OUTCOMES[result.id]
         if (outcome) {
-          const seedEntry = TRADESPEOPLE.find((tp) => tp.id === result.id)
           updateResult(job.id, result.id, {
             status: "complete",
             ...outcome,
-            handlesJob: seedEntry?.tradeTypes.includes(job.tradeType) ?? true,
           })
         } else {
           updateResult(job.id, result.id, { status: "no-answer" })
