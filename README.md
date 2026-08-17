@@ -35,6 +35,14 @@ TradeFinder automates that phone-around. You describe the job once; CALL-E phone
 
 Each tradesperson is called independently (`client.calls.createAndWait()` per recipient, run in parallel with `Promise` fan-out), so results trickle into the comparison as each individual call finishes rather than waiting on the slowest one.
 
+Calls only ever happen when a user submits the job request form. Nothing runs automatically, in the background or on a schedule.
+
+## Screenshots
+
+| Job request | Live dispatch | Comparison |
+| --- | --- | --- |
+| <img src="docs/screenshots/form.png" width="260" alt="Job request form" /> | <img src="docs/screenshots/search.png" width="260" alt="Live call status" /> | <img src="docs/screenshots/results.png" width="260" alt="Results comparison table" /> |
+
 ## Tech stack
 
 - [Next.js](https://nextjs.org) 16 (App Router, TypeScript)
@@ -62,6 +70,8 @@ Then open `http://localhost:3000`.
 | `DRY_RUN` | No | `true` | `true` uses fake, staggered results (no CALL-E account needed). Set to `false` to place real calls. |
 | `CALLE_API_KEY` | Only if `DRY_RUN=false` | N/A | From the CALL-E dashboard. |
 | `CALLE_BASE_URL` | No | `https://api.heycall-e.com` | Override for a different CALL-E environment. |
+
+Never commit a real `CALLE_API_KEY`. `.env.local` is gitignored; `.env.example` documents the required variables without values.
 
 The tradesperson list is a seed file at `src/data/tradespeople.json`: five entries with placeholder numbers in the shape `+44 7XXX XXXXXX` (masked here; the file itself holds a fake but validly-formatted placeholder per entry). Swap in real E.164 numbers of people who've agreed to receive a demo call before testing with `DRY_RUN=false`.
 
