@@ -4,12 +4,6 @@ import { useRouter } from "next/navigation"
 import { useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -20,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Ticket } from "@/components/ticket"
 
 const TRADE_TYPES = [
   "Plumbing",
@@ -50,13 +45,14 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16 dark:bg-black">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-xl">Find a Tradesperson</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <div className="flex flex-1 items-center justify-center bg-background px-4 py-16">
+      <div className="w-full max-w-md">
+        <Ticket label="Job ticket" number="NEW">
+          <h1 className="font-heading text-2xl font-semibold text-foreground">
+            Find a Tradesperson
+          </h1>
+
+          <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               <Label htmlFor="trade-type">Trade type</Label>
               <Select
@@ -115,12 +111,12 @@ export default function Home() {
               />
             </div>
 
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="mt-1 w-full">
               Find Tradespeople
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </Ticket>
+      </div>
     </div>
   )
 }

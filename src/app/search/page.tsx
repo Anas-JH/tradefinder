@@ -3,12 +3,11 @@
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useRef, useState } from "react"
-import { CheckCircle2Icon, CircleAlertIcon, XCircleIcon } from "lucide-react"
+import { CircleAlertIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Spinner } from "@/components/ui/spinner"
+import { Ticket } from "@/components/ticket"
 import type { CallResult } from "@/lib/call-jobs"
 
 const POLL_INTERVAL_MS = 1500
@@ -95,24 +94,30 @@ function SearchStatus() {
     { label: "Problem", value: description },
   ].filter((detail) => detail.value)
 
+  const ticketRef = jobId ? jobId.slice(0, 8).toUpperCase() : undefined
+
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16 dark:bg-black">
+    <div className="flex flex-1 items-center justify-center bg-background px-4 py-16">
       <div className="flex w-full max-w-md flex-col gap-6">
-        <h1 className="text-xl font-medium">Calling tradespeople…</h1>
+        <h1 className="font-heading text-2xl font-semibold text-foreground">
+          Calling tradespeople…
+        </h1>
 
         {jobDetails.length > 0 && (
-          <Card>
-            <CardContent>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-                {jobDetails.map((detail) => (
-                  <div key={detail.label} className="contents">
-                    <dt className="text-muted-foreground">{detail.label}</dt>
-                    <dd className="font-medium">{detail.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </CardContent>
-          </Card>
+          <Ticket label="Job ticket" number={ticketRef}>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+              {jobDetails.map((detail) => (
+                <div key={detail.label} className="contents">
+                  <dt className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
+                    {detail.label}
+                  </dt>
+                  <dd className="font-medium text-foreground">
+                    {detail.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Ticket>
         )}
 
         {error && (
@@ -123,25 +128,31 @@ function SearchStatus() {
           </Alert>
         )}
 
-        {!error && results.length === 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-3 text-sm text-muted-foreground dark:bg-black">
-            <Spinner />
-            Starting calls…
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <ul className="flex flex-col gap-3">
-            {results.map((result) => (
-              <li
-                key={result.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 dark:bg-black"
-              >
-                <span className="text-sm font-medium">{result.name}</span>
-                <StatusIndicator status={result.status} />
-              </li>
-            ))}
-          </ul>
+        {!error && (
+          <Ticket label="Dispatch log" number={ticketRef}>
+            {results.length === 0 ? (
+              <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+                <span className="size-2 shrink-0 animate-pulse rounded-full bg-safety" />
+                <span className="font-mono text-xs tracking-wider uppercase">
+                  Starting calls…
+                </span>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {results.map((result) => (
+                  <li
+                    key={result.id}
+                    className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <span className="text-sm font-medium text-foreground">
+                      {result.name}
+                    </span>
+                    <StatusIndicator status={result.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Ticket>
         )}
 
         {done && jobId && (
@@ -161,25 +172,25 @@ function SearchStatus() {
 function StatusIndicator({ status }: { status: CallResult["status"] }) {
   if (status === "calling") {
     return (
-      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Spinner />
-        Calling...
+      <span className="flex items-center gap-1.5 font-mono text-xs tracking-wider text-muted-foreground uppercase">
+        <span className="size-2 animate-pulse rounded-full bg-safety" />
+        Calling…
       </span>
     )
   }
 
   if (status === "complete") {
     return (
-      <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-500">
-        <CheckCircle2Icon className="size-4" />
+      <span className="flex items-center gap-1.5 font-mono text-xs tracking-wider text-success uppercase">
+        <span className="size-2 rounded-full bg-success" />
         Complete
       </span>
     )
   }
 
   return (
-    <span className="flex items-center gap-1.5 text-sm text-red-600 dark:text-red-500">
-      <XCircleIcon className="size-4" />
+    <span className="flex items-center gap-1.5 font-mono text-xs tracking-wider text-destructive uppercase">
+      <span className="size-2 rounded-full bg-destructive" />
       No answer
     </span>
   )

@@ -3,20 +3,11 @@
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useRef, useState } from "react"
-import {
-  CheckIcon,
-  CircleAlertIcon,
-  InfoIcon,
-  MinusIcon,
-  SearchIcon,
-  XIcon,
-} from "lucide-react"
+import { CheckIcon, CircleAlertIcon, MinusIcon, SearchIcon, XIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Spinner } from "@/components/ui/spinner"
+import { Ticket } from "@/components/ticket"
 import {
   Table,
   TableBody,
@@ -86,6 +77,8 @@ function ResultsContent() {
     }
   }, [jobId])
 
+  const ticketRef = jobId ? jobId.slice(0, 8).toUpperCase() : undefined
+
   const searchAgainButton = (
     <div>
       <Button
@@ -132,9 +125,11 @@ function ResultsContent() {
     return (
       <PageShell>
         {searchAgainButton}
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-3 text-sm text-muted-foreground dark:bg-black">
-          <Spinner />
-          Loading results…
+        <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+          <span className="size-2 shrink-0 animate-pulse rounded-full bg-safety" />
+          <span className="font-mono text-xs tracking-wider uppercase">
+            Loading results…
+          </span>
         </div>
       </PageShell>
     )
@@ -158,41 +153,42 @@ function ResultsContent() {
   const minFee = fees.length > 0 ? Math.min(...fees) : null
   const maxFee = fees.length > 0 ? Math.max(...fees) : null
 
-  const stillCalling = results.length - results.filter((r) => r.status !== "calling").length
+  const stillCalling =
+    results.length - results.filter((r) => r.status !== "calling").length
 
   return (
     <PageShell>
       {searchAgainButton}
 
       <div>
-        <h1 className="text-xl font-medium">Tradespeople available</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {results.length} tradespeople contacted · {available.length} available
+        <h1 className="font-heading text-2xl font-semibold text-foreground">
+          Tradespeople available
+        </h1>
+        <p className="mt-1 font-mono text-sm text-muted-foreground">
+          {results.length} contacted · {available.length} available
           {minFee !== null && maxFee !== null && (
-            <> · Price range: £{minFee}–£{maxFee}</>
+            <> · £{minFee}–£{maxFee}</>
           )}
         </p>
         {!done && (
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Spinner />
-            Still waiting on {stillCalling} call{stillCalling === 1 ? "" : "s"}…
+          <p className="mt-1 flex items-center gap-1.5 font-mono text-xs tracking-wider text-muted-foreground uppercase">
+            <span className="size-2 animate-pulse rounded-full bg-safety" />
+            Still waiting on {stillCalling} call{stillCalling === 1 ? "" : "s"}
+            …
           </p>
         )}
       </div>
 
       {recommended && (
-        <Card>
-          <CardContent className="flex items-start gap-3">
-            <InfoIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {recommended.name}
-              </span>{" "}
-              is recommended — lowest call-out fee (£{recommended.calloutFee})
-              {recommendedIsSameDay ? " with same-day availability" : ""}.
-            </p>
-          </CardContent>
-        </Card>
+        <Ticket label="Recommendation" number={ticketRef}>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {recommended.name}
+            </span>{" "}
+            is recommended — lowest call-out fee (£{recommended.calloutFee})
+            {recommendedIsSameDay ? " with same-day availability" : ""}.
+          </p>
+        </Ticket>
       )}
 
       {available.length === 0 ? (
@@ -200,47 +196,55 @@ function ResultsContent() {
           None of the tradespeople contacted were available.
         </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Availability</TableHead>
-              <TableHead>Call-out fee</TableHead>
-              <TableHead>Est. arrival</TableHead>
-              <TableHead>Handles this job</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {available.map((tradesperson) => (
-              <TableRow key={tradesperson.id}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    {tradesperson.name}
-                    {recommended && tradesperson.id === recommended.id && (
-                      <Badge variant="secondary">Recommended</Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>{tradesperson.availability ?? "—"}</TableCell>
-                <TableCell>
-                  {tradesperson.calloutFee !== null
-                    ? `£${tradesperson.calloutFee}`
-                    : "—"}
-                </TableCell>
-                <TableCell>{tradesperson.eta ?? "—"}</TableCell>
-                <TableCell>
-                  {tradesperson.handlesJob === true ? (
-                    <CheckIcon className="size-4 text-foreground" />
-                  ) : tradesperson.handlesJob === false ? (
-                    <XIcon className="size-4 text-muted-foreground" />
-                  ) : (
-                    <MinusIcon className="size-4 text-muted-foreground" />
-                  )}
-                </TableCell>
+        <div className="rounded-sm border border-border bg-card">
+          <div className="px-4 py-2 font-mono text-[11px] font-medium tracking-widest text-muted-foreground uppercase">
+            Manifest
+          </div>
+          <div className="border-t border-dashed border-border" />
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Availability</TableHead>
+                <TableHead>Call-out fee</TableHead>
+                <TableHead>Est. arrival</TableHead>
+                <TableHead>Handles job</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {available.map((tradesperson) => (
+                <TableRow key={tradesperson.id}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      {tradesperson.name}
+                      {recommended && tradesperson.id === recommended.id && (
+                        <span className="-rotate-3 rounded-sm border-2 border-safety px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-widest text-safety uppercase">
+                          Recommended
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{tradesperson.availability ?? "—"}</TableCell>
+                  <TableCell>
+                    {tradesperson.calloutFee !== null
+                      ? `£${tradesperson.calloutFee}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell>{tradesperson.eta ?? "—"}</TableCell>
+                  <TableCell>
+                    {tradesperson.handlesJob === true ? (
+                      <CheckIcon className="size-4 text-success" />
+                    ) : tradesperson.handlesJob === false ? (
+                      <XIcon className="size-4 text-destructive" />
+                    ) : (
+                      <MinusIcon className="size-4 text-muted-foreground" />
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </PageShell>
   )
@@ -248,7 +252,7 @@ function ResultsContent() {
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16 dark:bg-black">
+    <div className="flex flex-1 items-center justify-center bg-background px-4 py-16">
       <div className="flex w-full max-w-3xl flex-col gap-6">{children}</div>
     </div>
   )
