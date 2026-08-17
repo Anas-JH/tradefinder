@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TradeFinder
 
-## Getting Started
+Tell us what you need — we'll call local tradespeople and compare availability, pricing, and response times.
 
-First, run the development server:
+Built for the [CALL-E](https://heycall-e.com) "Your Code Is Calling" hackathon.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## What it does
+
+When something breaks — a boiler, a leaking pipe, a locked-out front door — the actual availability and call-out fee of a local tradesperson almost never lives online. Trade directories list who exists, not who's free today and what they charge. The only way to find out is to phone around, one at a time, and compare answers you have to remember yourself.
+
+TradeFinder automates that phone-around. You describe the job once; CALL-E phones a shortlist of tradespeople in parallel, on your behalf, and asks each of them the same three questions: can you take this job, what's your call-out fee, and when could you arrive. The answers come back structured, not as call recordings you have to relisten to, so they can be lined up in a single comparison table with a recommendation.
+
+## How it works
+
+```
+  Job request form
+        │  (trade type, postcode, urgency, description)
+        ▼
+  POST /api/search
+        │  creates a job, fires one CALL-E call per tradesperson — in parallel
+        ▼
+  CALL-E places outbound calls, holds the conversation,
+  and extracts a structured result per recipient
+        │
+        ▼
+  /search polls the job's status and shows each call
+  resolving live: Calling → Complete / No answer
+        │
+        ▼
+  /results reads the same job and renders a comparison
+  table — availability, call-out fee, ETA, whether they
+  handle this job type — with a recommendation for the
+  cheapest same-day option that actually handles the work
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Each tradesperson is called independently (`client.calls.createAndWait()` per recipient, run in parallel with `Promise` fan-out), so results trickle into the comparison as each individual call finishes rather than waiting on the slowest one.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- [Next.js](https://nextjs.org) 16 (App Router, TypeScript)
+- [Tailwind CSS](https://tailwindcss.com) v4
+- [shadcn/ui](https://ui.shadcn.com) (base-nova preset, on top of [Base UI](https://base-ui.com))
+- [`@call-e/calle`](https://www.npmjs.com/package/@call-e/calle) — the CALL-E TypeScript server SDK
+- An in-memory job store (`src/lib/call-jobs.ts`) — sufficient for a single-instance hackathon demo; not durable across restarts
 
-## Learn More
+## Setup
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+git clone <this-repo-url>
+cd tradefinder
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then open `http://localhost:3000`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Environment variables (`.env.local`)
 
-## Deploy on Vercel
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `DRY_RUN` | No | `true` | `true` uses fake, staggered results — no CALL-E account needed. Set to `false` to place real calls. |
+| `CALLE_API_KEY` | Only if `DRY_RUN=false` | — | From the CALL-E dashboard. |
+| `CALLE_BASE_URL` | No | `https://api.heycall-e.com` | Override for a different CALL-E environment. |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The tradesperson list is a seed file at `src/data/tradespeople.json` — five entries with placeholder numbers in the shape `+44 7XXX XXXXXX` (masked here; the file itself holds a fake but validly-formatted placeholder per entry). Swap in real E.164 numbers of people who've agreed to receive a demo call before testing with `DRY_RUN=false`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Dry-run mode
+
+`DRY_RUN=true` is the default, and it's what runs with zero configuration. No CALL-E account, no API key, no real phone numbers required. `POST /api/search` still creates a real job and the `/search` page still polls it live, but each tradesperson's status resolves on a fixed 2-second stagger with fabricated results (fee, ETA, availability) instead of a real call — so the entire flow, including the comparison table and recommendation logic, is fully exercisable offline.
+
+## Side effects
+
+**When `DRY_RUN=false`, this app places real outbound phone calls** to every phone number in `src/data/tradespeople.json`, via the CALL-E API, the moment a search is submitted. Each call is a live phone conversation conducted by CALL-E on your behalf — it will ring the number, speak, and expect a human on the other end. Only run with `DRY_RUN=false` once you've replaced the placeholder numbers with real numbers belonging to people who know they're going to receive a test call. This also consumes your CALL-E account's call quota (20 free calls per account).
+
+## Cancellation
+
+There is no recurring schedule, campaign, or follow-up call created by this app — every call is a single one-shot `createAndWait` request per tradesperson, scoped to one job search. Nothing keeps running, retrying, or calling again after that one call resolves (or hits its 10-minute timeout). The UI has no "cancel" control for a call already in flight; the only way to stop one early is stopping the dev server, which stops TradeFinder from waiting on the result but does not reach into CALL-E to end a call that's already ringing or in progress.
+
+## Demo
+
+[Demo video](https://www.youtube.com/watch?v=REPLACE_ME)
