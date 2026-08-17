@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,7 @@ const TRADE_TYPES = [
 const URGENCY_OPTIONS = ["Today", "Tomorrow", "This Week"] as const
 
 export default function Home() {
+  const router = useRouter()
   const [tradeType, setTradeType] = useState("")
   const [postcode, setPostcode] = useState("")
   const [urgency, setUrgency] = useState("")
@@ -38,12 +40,13 @@ export default function Home() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    console.log({
+    const params = new URLSearchParams({
       tradeType,
       postcode: postcode.trim().toUpperCase(),
       urgency,
       description,
     })
+    router.push(`/search?${params.toString()}`)
   }
 
   return (
@@ -56,7 +59,10 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               <Label htmlFor="trade-type">Trade type</Label>
-              <Select value={tradeType} onValueChange={setTradeType}>
+              <Select
+                value={tradeType}
+                onValueChange={(value) => setTradeType(value ?? "")}
+              >
                 <SelectTrigger id="trade-type" className="w-full">
                   <SelectValue placeholder="Select a trade" />
                 </SelectTrigger>
@@ -82,7 +88,10 @@ export default function Home() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="urgency">Urgency</Label>
-              <Select value={urgency} onValueChange={setUrgency}>
+              <Select
+                value={urgency}
+                onValueChange={(value) => setUrgency(value ?? "")}
+              >
                 <SelectTrigger id="urgency" className="w-full">
                   <SelectValue placeholder="Select urgency" />
                 </SelectTrigger>
