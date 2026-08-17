@@ -37,6 +37,8 @@ Each tradesperson is called independently (`client.calls.createAndWait()` per re
 
 Calls only ever happen when a user submits the job request form. Nothing runs automatically, in the background or on a schedule.
 
+Built for the UK: the postcode field expects UK postcode formatting (not validated or geocoded), and outbound calls are placed with `region: "GB"` / `locale: "en-GB"` against E.164 `+44` numbers.
+
 ## Screenshots
 
 | Job request | Live dispatch | Comparison |
