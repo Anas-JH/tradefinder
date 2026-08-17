@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { ArrowLeftIcon, CheckIcon, XIcon } from "lucide-react"
+import { CheckIcon, InfoIcon, SearchIcon, XIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -38,11 +39,22 @@ const TRADESPEOPLE = [
 
 const CONTACTED_COUNT = 5
 
+function isSameDay(availability: string) {
+  return availability.toLowerCase().startsWith("today")
+}
+
 export default function ResultsPage() {
-  const cheapestFee = Math.min(...TRADESPEOPLE.map((t) => t.calloutFee))
   const fees = TRADESPEOPLE.map((t) => t.calloutFee)
   const minFee = Math.min(...fees)
   const maxFee = Math.max(...fees)
+
+  const sameDayOptions = TRADESPEOPLE.filter((t) => isSameDay(t.availability))
+  const recommendationPool =
+    sameDayOptions.length > 0 ? sameDayOptions : TRADESPEOPLE
+  const recommended = recommendationPool.reduce((cheapest, t) =>
+    t.calloutFee < cheapest.calloutFee ? t : cheapest
+  )
+  const recommendedIsSameDay = isSameDay(recommended.availability)
 
   return (
     <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16 dark:bg-black">
@@ -54,8 +66,8 @@ export default function ResultsPage() {
             nativeButton={false}
             render={<Link href="/" />}
           >
-            <ArrowLeftIcon />
-            Back to form
+            <SearchIcon />
+            Search Again
           </Button>
         </div>
 
@@ -66,6 +78,19 @@ export default function ResultsPage() {
             available · Price range: £{minFee}–£{maxFee}
           </p>
         </div>
+
+        <Card>
+          <CardContent className="flex items-start gap-3">
+            <InfoIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {recommended.name}
+              </span>{" "}
+              is recommended — lowest call-out fee (£{recommended.calloutFee})
+              {recommendedIsSameDay ? " with same-day availability" : ""}.
+            </p>
+          </CardContent>
+        </Card>
 
         <Table>
           <TableHeader>
@@ -83,7 +108,7 @@ export default function ResultsPage() {
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     {tradesperson.name}
-                    {tradesperson.calloutFee === cheapestFee && (
+                    {tradesperson.name === recommended.name && (
                       <Badge variant="secondary">Recommended</Badge>
                     )}
                   </div>
