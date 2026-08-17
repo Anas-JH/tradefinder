@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { CalleClient } from "@call-e/calle"
 
-import { createJob, getJob, updateResult, type CallJob } from "@/lib/call-jobs"
+import {
+  createJob,
+  getJob,
+  updateResult,
+  type CallJob,
+  type CallResult,
+} from "@/lib/call-jobs"
 import { TRADESPEOPLE } from "@/lib/tradespeople"
 
 export const runtime = "nodejs"
@@ -99,7 +105,31 @@ function runDryRun(job: CallJob) {
   })
 }
 
-async function runRealCalls(job: CallJob) {
+const RECIPIENT_RESULT_SCHEMA = {
+  type: "object",
+  required: ["can_help"],
+  additionalProperties: false,
+  properties: {
+    can_help: {
+      type: "boolean",
+      description: "Whether this tradesperson can take the job.",
+    },
+    callout_fee_gbp: {
+      type: ["number", "null"],
+      description: "Quoted call-out fee in GBP, if given.",
+    },
+    eta: {
+      type: ["string", "null"],
+      description: "Estimated arrival time, if given.",
+    },
+    availability: {
+      type: ["string", "null"],
+      description: "Free-text availability window, if given.",
+    },
+  },
+} as const
+
+function runRealCalls(job: CallJob) {
   const apiKey = process.env.CALLE_API_KEY
   if (!apiKey) {
     console.error("CALLE_API_KEY is not set; cannot place real calls")
@@ -114,76 +144,57 @@ async function runRealCalls(job: CallJob) {
     baseUrl: process.env.CALLE_BASE_URL,
   })
 
-  try {
-    const call = await client.calls.createAndWait(
-      {
-        task: `You are calling on behalf of a customer looking for a ${job.tradeType} tradesperson near postcode ${job.postcode}. The job is needed: ${job.urgency}. Problem description: ${job.description || "not provided"}. Find out whether this tradesperson can take the job, their call-out fee in GBP, when they could arrive, and their general availability.`,
-        recipients: job.results.map((result) => ({
-          phone: result.phone,
-          region: "GB",
-          locale: "en-GB",
-        })),
-        recipientResultSchema: {
-          type: "object",
-          required: ["can_help"],
-          additionalProperties: false,
-          properties: {
-            can_help: {
-              type: "boolean",
-              description: "Whether this tradesperson can take the job.",
-            },
-            callout_fee_gbp: {
-              type: ["number", "null"],
-              description: "Quoted call-out fee in GBP, if given.",
-            },
-            eta: {
-              type: ["string", "null"],
-              description: "Estimated arrival time, if given.",
-            },
-            availability: {
-              type: ["string", "null"],
-              description: "Free-text availability window, if given.",
-            },
-          },
-        },
-        metadata: { jobId: job.id },
-      },
-      { idempotencyKey: job.id, timeoutMs: 10 * 60 * 1000 }
-    )
-
-    job.results.forEach((result) => {
-      const recipient = call.recipients.find((r) =>
-        r.phones.includes(result.phone)
-      )
-      if (!recipient) {
-        updateResult(job.id, result.id, { status: "no-answer" })
-        return
-      }
-
-      if (recipient.status !== "completed") {
-        updateResult(job.id, result.id, { status: "no-answer" })
-        return
-      }
-
-      const structured = recipient.structuredResult as {
-        can_help?: boolean
-        callout_fee_gbp?: number | null
-        eta?: string | null
-        availability?: string | null
-      } | null
-
-      updateResult(job.id, result.id, {
-        status: "complete",
-        handlesJob: structured?.can_help ?? null,
-        calloutFee: structured?.callout_fee_gbp ?? null,
-        eta: structured?.eta ?? null,
-        availability: structured?.availability ?? null,
-      })
-    })
-  } catch (error) {
-    console.error("CALL-E createAndWait failed", error)
-    job.results.forEach((result) =>
+  // Fire one createAndWait per recipient, in parallel, so each result lands
+  // in the job store — and gets picked up by polling — as soon as that
+  // individual call finishes, instead of waiting for the whole batch.
+  job.results.forEach((result) => {
+    callOne(client, job, result).catch((error) => {
+      console.error(`CALL-E call failed for ${result.name}`, error)
       updateResult(job.id, result.id, { status: "no-answer" })
-    )
+    })
+  })
+}
+
+async function callOne(
+  client: CalleClient,
+  job: CallJob,
+  result: CallResult
+) {
+  const call = await client.calls.createAndWait(
+    {
+      task: `You are calling on behalf of a customer looking for a ${job.tradeType} tradesperson near postcode ${job.postcode}. The job is needed: ${job.urgency}. Problem description: ${job.description || "not provided"}. Find out whether this tradesperson can take the job, their call-out fee in GBP, when they could arrive, and their general availability.`,
+      recipient: {
+        phone: result.phone,
+        region: "GB",
+        locale: "en-GB",
+      },
+      recipientResultSchema: RECIPIENT_RESULT_SCHEMA,
+      metadata: { jobId: job.id, resultId: result.id },
+    },
+    { idempotencyKey: `${job.id}:${result.id}`, timeoutMs: 10 * 60 * 1000 }
+  )
+
+  const recipient =
+    call.recipients.find((r) => r.phones.includes(result.phone)) ??
+    call.recipients[0]
+
+  if (!recipient || recipient.status !== "completed") {
+    updateResult(job.id, result.id, { status: "no-answer" })
+    return
   }
+
+  const structured = recipient.structuredResult as {
+    can_help?: boolean
+    callout_fee_gbp?: number | null
+    eta?: string | null
+    availability?: string | null
+  } | null
+
+  updateResult(job.id, result.id, {
+    status: "complete",
+    handlesJob: structured?.can_help ?? null,
+    calloutFee: structured?.callout_fee_gbp ?? null,
+    eta: structured?.eta ?? null,
+    availability: structured?.availability ?? null,
+  })
 }
